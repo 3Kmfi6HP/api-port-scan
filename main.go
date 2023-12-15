@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -31,8 +32,11 @@ func main() {
 	fileName := "ip.txt"
 	ports := []string{"80", "443", "8080", "8880", "2052", "2082", "2086", "2095", "2053", "2083", "2087", "2096", "8443"}
 
+	maxThreads := flag.Int("max", 200, "maximum number of threads")
+	flag.Parse()
+
 	// Perform API scan on given IP addresses and ports
-	results := apiscan(fileName, ports)
+	results := apiscan(fileName, ports, *maxThreads)
 
 	outputFileName := "scan_results.txt"
 	err := writeScanResultsToFile(results, outputFileName)
@@ -44,9 +48,10 @@ func main() {
 	fmt.Println("Scan results written to", outputFileName)
 }
 
-func apiscan(fileName string, ports []string) []ScanResult {
+func apiscan(fileName string, ports []string, maxThreads int) []ScanResult {
 	var wg sync.WaitGroup
 	results := make([]ScanResult, 0)
+	semaphore := make(chan struct{}, maxThreads) // Use a channel as a semaphore to limit the number of goroutines simultaneously
 
 	// Read IP addresses from file
 	IPs := readIPsFromFile(fileName)
@@ -66,8 +71,13 @@ func apiscan(fileName string, ports []string) []ScanResult {
 		for _, cidrIP := range cidrIPs {
 			for _, port := range ports {
 				wg.Add(1)
+				semaphore <- struct{}{} // Acquire a semaphore
+
 				go func(ip, port string) {
-					defer wg.Done()
+					defer func() {
+						wg.Done()
+						<-semaphore // Release the semaphore
+					}()
 
 					// Construct URL for API call
 					url := fmt.Sprintf("http://duankou.wlphp.com/api.php?i=%s&p=%s", ip, port)
@@ -117,6 +127,8 @@ func apiscan(fileName string, ports []string) []ScanResult {
 	return results
 }
 
+// ...rest of the code remains the same...
+
 func writeToFile(line, fileName string) {
 	file, err := os.OpenFile(fileName, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
@@ -163,23 +175,22 @@ func readIPsFromFile(fileName string) []string {
 
 	return ips
 }
-
 func ConvertCIDRToIPs(cidr string) ([]string, error) {
 	parts := strings.Split(cidr, "/")
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("Invalid CIDR format: %s", cidr)
+		return nil, fmt.Errorf("invalid CIDR format: %s", cidr)
 	}
 
 	ips := make([]string, 0)
 	ip := parts[0]
 	prefix, err := strconv.Atoi(parts[1])
 	if err != nil {
-		return nil, fmt.Errorf("Invalid CIDR format: %s", cidr)
+		return nil, fmt.Errorf("invalid CIDR format: %s", cidr)
 	}
 
 	cidrIP := net.ParseIP(ip)
 	if cidrIP == nil {
-		return nil, fmt.Errorf("Invalid IP address: %s", ip)
+		return nil, fmt.Errorf("invalid IP address: %s", ip)
 	}
 
 	ipNet := &net.IPNet{IP: cidrIP, Mask: net.CIDRMask(prefix, 32)}
