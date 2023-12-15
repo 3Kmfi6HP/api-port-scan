@@ -29,7 +29,7 @@ type Msg struct {
 
 func main() {
 	fileName := "ip.txt"
-	ports := []string{"80", "443", "8080", "8880", "2052", "2082", "2086", "2095", "443", "2053", "2083", "2087", "2096", "8443"}
+	ports := []string{"80", "443", "8080", "8880", "2052", "2082", "2086", "2095", "2053", "2083", "2087", "2096", "8443"}
 
 	// Perform API scan on given IP addresses and ports
 	results := apiscan(fileName, ports)
